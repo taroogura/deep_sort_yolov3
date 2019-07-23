@@ -101,7 +101,7 @@ def track(yolo, video_path, image_output_dir):
             bbox = det.to_tlbr()
             cv2.rectangle(frame,(int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])),(255,0,0), 2)
             
-        cv2.imshow('', frame)
+        # cv2.imshow('', frame)
         
         if writeVideo_flag:
             # save a frame
