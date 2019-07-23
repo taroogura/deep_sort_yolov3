@@ -133,6 +133,10 @@ def crpp_images(video_dir, root_image_output_dir):
 
     subprocess.call(["mkdir", "-p", root_image_output_dir]);
     for video_path in video_paths:
+        if os.path.isfile(video_path + ".avi"):
+            print(video_path + " already processed!")
+            continue
+        
         image_output_dir = os.path.join(root_image_output_dir, os.path.splitext(os.path.basename(video_path))[0])
         subprocess.call(["mkdir", "-p", image_output_dir]);
         track(YOLO(), video_path, image_output_dir)
