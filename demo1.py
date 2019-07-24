@@ -33,12 +33,10 @@ model_filename = 'model_data/mars-small128.pb'
 encoder = gdet.create_box_encoder(model_filename,batch_size=1)
 
 metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
-tracker = Tracker(metric)
-
 writeVideo_flag = True 
 
 def track(yolo, video_path, image_output_dir):
-
+    tracker = Tracker(metric)
     
     # video_capture = cv2.VideoCapture(0)
     video_capture = cv2.VideoCapture(video_path)
