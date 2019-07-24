@@ -84,8 +84,14 @@ def track(yolo, video_path, image_output_dir):
                 continue
             # person_output_dir = os.path.join(root_image_output_dir, os.path.splitext(os.path.basename(video_path))[0])
 
-            person_output_dir = os.path.join(image_output_dir, "%04d" %  track.track_id)
-            subprocess.call(["mkdir", "-p", person_output_dir]);
+            person_output_dir = os.path.join(image_output_dir, "%04d" % track.track_id)
+            try:
+                subprocess.call(["mkdir", "-p", person_output_dir]);
+            except OSError as e:
+                print("couldn't make ", person_output_dir)
+                print(e)
+                continue
+
 
             bbox = track.to_tlbr()
             
@@ -130,15 +136,25 @@ def track(yolo, video_path, image_output_dir):
 
 def crpp_images(video_dir, root_image_output_dir):
     video_paths = glob(os.path.join(video_dir, "*.mkv"))    # いったんmkvだけ
-
-    subprocess.call(["mkdir", "-p", root_image_output_dir]);
+    try:
+        subprocess.call(["mkdir", "-p", root_image_output_dir]);
+    except OSError as e:
+        print("couldn't make ", root_image_output_dir)
+        print(e)
+        continue
     for video_path in video_paths:
         if os.path.isfile(video_path + ".avi"):
             print(video_path + " already processed!")
             continue
         
         image_output_dir = os.path.join(root_image_output_dir, os.path.splitext(os.path.basename(video_path))[0])
-        subprocess.call(["mkdir", "-p", image_output_dir]);
+        try:
+            subprocess.call(["mkdir", "-p", image_output_dir]);
+        except OSError as e:
+            print("couldn't make ", image_output_dir)
+            print(e)
+            continue
+
         track(YOLO(), video_path, image_output_dir)
 
 
