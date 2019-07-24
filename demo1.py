@@ -90,7 +90,7 @@ def track(yolo, video_path, image_output_dir):
             except OSError as e:
                 print("couldn't make ", person_output_dir)
                 print(e)
-                continue
+                pass
 
 
             bbox = track.to_tlbr()
@@ -141,7 +141,7 @@ def crpp_images(video_dir, root_image_output_dir):
     except OSError as e:
         print("couldn't make ", root_image_output_dir)
         print(e)
-        continue
+        pass
     for video_path in video_paths:
         if os.path.isfile(video_path + ".avi"):
             print(video_path + " already processed!")
@@ -153,7 +153,7 @@ def crpp_images(video_dir, root_image_output_dir):
         except OSError as e:
             print("couldn't make ", image_output_dir)
             print(e)
-            continue
+            pass
 
         track(YOLO(), video_path, image_output_dir)
 
