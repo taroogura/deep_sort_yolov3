@@ -23,21 +23,22 @@ from tools import generate_detections as gdet
 from deep_sort.detection import Detection as ddet
 warnings.filterwarnings('ignore')
 
+# Definition of the parameters
+max_cosine_distance = 0.3
+nn_budget = None
+nms_max_overlap = 1.0
+
+# deep_sort 
+model_filename = 'model_data/mars-small128.pb'
+encoder = gdet.create_box_encoder(model_filename,batch_size=1)
+
+metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
+tracker = Tracker(metric)
+
+writeVideo_flag = True 
+
 def track(yolo, video_path, image_output_dir):
 
-   # Definition of the parameters
-    max_cosine_distance = 0.3
-    nn_budget = None
-    nms_max_overlap = 1.0
-    
-   # deep_sort 
-    model_filename = 'model_data/mars-small128.pb'
-    encoder = gdet.create_box_encoder(model_filename,batch_size=1)
-    
-    metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
-    tracker = Tracker(metric)
-
-    writeVideo_flag = True 
     
     # video_capture = cv2.VideoCapture(0)
     video_capture = cv2.VideoCapture(video_path)
