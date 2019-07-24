@@ -134,6 +134,7 @@ def track(yolo, video_path, image_output_dir):
 
 
 def crpp_images(video_dir, root_image_output_dir):
+    Y = YOLO()
     video_paths = glob(os.path.join(video_dir, "*.mkv"))    # いったんmkvだけ
     try:
         subprocess.call(["mkdir", "-p", root_image_output_dir])
@@ -154,7 +155,7 @@ def crpp_images(video_dir, root_image_output_dir):
             print(e)
             pass
 
-        track(YOLO(), video_path, image_output_dir)
+        track(Y, video_path, image_output_dir)
 
 
 if __name__ == '__main__':
