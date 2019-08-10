@@ -10,10 +10,13 @@ import warnings
 import sys
 import subprocess
 from glob import glob
+from tqdm import tqdm
 import cv2
 import numpy as np
 from PIL import Image
 from yolo import YOLO
+from mtcnn.mtcnn import MTCNN
+import pandas as pd
 
 from deep_sort import preprocessing
 from deep_sort import nn_matching
@@ -28,6 +31,9 @@ max_cosine_distance = 0.3
 nn_budget = None
 nms_max_overlap = 1.0
 
+# mtcnn test
+detector = MTCNN()
+
 # deep_sort 
 model_filename = 'model_data/mars-small128.pb'
 encoder = gdet.create_box_encoder(model_filename,batch_size=1)
@@ -35,10 +41,48 @@ encoder = gdet.create_box_encoder(model_filename,batch_size=1)
 metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
 writeVideo_flag = True 
 
+def sharpness_lap(image):
+    img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    lap = cv2.Laplacian(img, cv2.CV_64F)
+
+    return lap.var()
+
+def square_padding(img):
+    """
+    長い方の辺の長さの正方形にパディングする
+    """
+    size = img.shape
+    long_len = size[0] if (size[0] > size[1]) else size[1]
+    
+    square_img = np.zeros((long_len, long_len, 3), np.uint8)
+
+    oy_idx = int((long_len - size[0]) / 2)
+    ox_idx = int((long_len - size[1]) / 2)
+    square_img[oy_idx:oy_idx + size[0], ox_idx:ox_idx + size[1]] = img
+
+    return square_img
+    
+def black_padding(img, ratio=1.5):
+    """
+    両辺の長さをratio倍にして、広げた文を黒くしておく
+    """
+    size = img.shape
+    long_l = int(size[0] * ratio)
+    long_w = int(size[1] * ratio)
+
+    padded_img = np.zeros((long_l, long_w, 3), np.uint8)
+
+    oy_idx = int((long_l - size[0]) / 2)
+    ox_idx = int((long_w - size[1]) / 2)
+    padded_img[oy_idx:oy_idx + size[0], ox_idx:ox_idx + size[1]] = img
+
+    return padded_img, oy_idx, ox_idx
+    
 def track(yolo, video_path, image_output_dir):
     tracker = Tracker(metric)
     
     # video_capture = cv2.VideoCapture(0)
+    video_name = os.path.basename(video_path)
     video_capture = cv2.VideoCapture(video_path)
 
     if writeVideo_flag:
@@ -53,26 +97,52 @@ def track(yolo, video_path, image_output_dir):
         
     fps = 0.0
     frame_id = 0
+    pre_frames_num = 5  # motionの設定で、motion検知前の5フレームくらいも保存しておくようにしておく
+    ave_pre_frame = None
+    ave_pre_image = None
+    
+    image_label_df = pd.DataFrame()
+
     while True:
         ret, frame = video_capture.read()  # frame shape 640*480*3
         if ret != True:
             break
         t1 = time.time()
 
+        # 背景差分テスト
+        if (frame_id <= pre_frames_num):
+            if (frame_id == 0):
+                ave_pre_frame = np.float32(frame)
+            elif (frame_id < pre_frames_num):
+                ave_pre_frame += np.float32(frame)
+            elif (frame_id == pre_frames_num):
+                ave_pre_frame = ave_pre_frame / pre_frames_num
+                ave_pre_frame = ave_pre_frame.astype(np.uint8)
+                ave_pre_image = Image.fromarray(ave_pre_frame[...,::-1])  #bgr to rgb
+                # cv2.imwrite("./ave_frame.jpg", ave_pre_frame)
+
+            frame_id += 1
+            continue
+
+
        # image = Image.fromarray(frame)
         image = Image.fromarray(frame[...,::-1]) #bgr to rgb
-        boxs = yolo.detect_image(image)
+        boxs, scores = yolo.detect_image(image)
        # print("box_num",len(boxs))
         features = encoder(frame,boxs)
         
         # score to 1.0 here).
-        detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(boxs, features)]
+        detections = [Detection(bbox, score, feature) for bbox, score, feature in zip(boxs, scores, features)]
         
         # Run non-maxima suppression.
         boxes = np.array([d.tlwh for d in detections])
         scores = np.array([d.confidence for d in detections])
-        indices = preprocessing.non_max_suppression(boxes, nms_max_overlap, scores)
+        if(len(boxes) > 0):
+            indices, overlaps = preprocessing.non_max_suppression(boxes, nms_max_overlap, scores)
+        else:
+            indices = []
         detections = [detections[i] for i in indices]
+        scores = [scores[i] for i in indices]
         
         # Call the tracker
         tracker.predict()
@@ -82,7 +152,6 @@ def track(yolo, video_path, image_output_dir):
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
             # person_output_dir = os.path.join(root_image_output_dir, os.path.splitext(os.path.basename(video_path))[0])
-
             person_output_dir = os.path.join(image_output_dir, "%04d" % track.track_id)
             try:
                 subprocess.call(["mkdir", "-p", person_output_dir])
@@ -91,23 +160,94 @@ def track(yolo, video_path, image_output_dir):
                 print(e)
                 pass
 
-
             bbox = track.to_tlbr()
-            
-            image_filename = "{}_{:04d}-{:04d}.jpg".format(os.path.basename(video_path), track.track_id, frame_id)
-            output_image_path = os.path.join(person_output_dir, image_filename)
-            cropped_image = frame[int(bbox[1]):int(bbox[3]), int(bbox[0]):int(bbox[2])]
-            cv2.imwrite(output_image_path, cropped_image)
+            body_t, body_l, body_b, body_r = (int(max(0, bbox[1])), int(max(0, bbox[0])), int(min(h, bbox[3])), int(min(w, bbox[2])))
 
-            cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])),(255,255,255), 2)
-            cv2.putText(frame, str(track.track_id), (int(bbox[0]), int(bbox[1])), 0, 5e-3 * 200, (0, 255, 0), 2)
+
+            image_filename = "{}_{:04d}-{:04d}.jpg".format(video_name, track.track_id, frame_id)
+            output_image_path = os.path.join(person_output_dir, image_filename)
+
+            cropped_image = frame[body_t:body_b, body_l:body_r]
+
+            # 背景差分テスト
+            # cropped_ave_pre_image = ave_pre_frame[body_l:body_r, body_t:body_b]
+            # blurred_diff = cv2.GaussianBlur(cropped_image, (3, 3), 0) - cv2.GaussianBlur(cropped_ave_pre_image, (3, 3), 0)
+            # blurred_diff = cropped_image.astype(np.float32) - cropped_ave_pre_image.astype(np.float32)
+
+            # blurred_diff = cv2.GaussianBlur(blurred_diff, (3, 3), 0)
+
+            # blurred_diff = np.linalg.norm(blurred_diff, axis=2)
+            # blurred_diff = cv2.GaussianBlur(blurred_diff, (5, 5), 0)
+            # blurred_diff = cv2.normalize(blurred_diff, None , 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+            # ret, th = cv2.threshold(blurred_diff, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            # ret, th = cv2.threshold(blurred_diff, 16, 255,cv2.THRESH_BINARY)
+            
+            # masked_image = cv2.bitwise_and(cropped_image, cropped_image, mask = th)
+
+            if (body_l + 1 > body_r or body_t + 1 > body_b):
+                continue
+
+
+            # square_padded_img = square_padding(cropped_image)
+            # black_padded_img = black_padding(square_padded_img)
+            # result = detector.detect_faces(black_padded_img)
+            black_padded_img, padded_len, padded_wid = black_padding(cropped_image)
+            result = detector.detect_faces(black_padded_img)
+            face_confidence = 0
+            face_lapvar = 0
+            face_output_image_path = ""
+            
+            if(len(result) > 0):
+                face_bbox = result[0]['box']
+                face_confidence = result[0]['confidence']
+
+                face_l, face_r, face_t, face_b = (int(face_bbox[0] - 0.15 * face_bbox[2]), int(face_bbox[0] + 1.15 * face_bbox[2]), \
+                                                  int(face_bbox[1] - 0.15 * face_bbox[3]), int(face_bbox[1] + 1.15 * face_bbox[3]))
+                face_clipped_image = black_padded_img.copy()[face_t : face_b, face_l : face_r]
+                square_padded_img = square_padding(face_clipped_image)
+                if (face_clipped_image.size > 0):
+                    face_output_image_path = output_image_path + "_face.jpg"
+                    cv2.imwrite(face_output_image_path, square_padded_img)
+                    # face_lapvar = sharpness_lap(face_clipped_image)
+                    face_lapvar = sharpness_lap(black_padded_img[int(face_bbox[1]):int(face_bbox[1] + face_bbox[3]), int(face_bbox[0]):int(face_bbox[0] + face_bbox[2])]  )
+
+
+            lapvar = sharpness_lap(cropped_image)
+            cv2.imwrite(output_image_path, cropped_image)
+            
+            # cv2.imwrite(output_image_path, masked_image)
+            # cv2.imwrite(output_image_path + "_mask.jpg", cv2.cvtColor(th, cv2.COLOR_GRAY2BGR))
+            # cv2.imwrite(output_image_path + "_blurred.jpg", cv2.cvtColor(blurred_diff, cv2.COLOR_GRAY2BGR))
+
+            # d = {"body_image_path": output_image_path, "body_image_path": face_output_image_path, "image_filename": image_filename,
+            #     "body_t": body_t, "body_l": body_l, "body_w": body_w, "body_h": body_h,
+            #     # "body_t": body_t, "body_l": body_l, "body_w": body_w, "body_h": body_h,
+            #     "embedding": embedding_str}
+            # per_label_df = per_label_df.append(d, ignore_index=True)
+
+
+            cv2.rectangle(frame, (body_l, body_t), (body_r, body_b),(255,255,255), 2)
+            cv2.putText(frame, str(track.track_id), (body_l, body_t), 0, 5e-3 * 200, (0, 255, 0), 2)
+
+            if (len(scores) > 0):
+                cv2.putText(frame, str('%.6f' % lapvar), (body_l, body_t + 40), 0, 5e-3 * 100, (255, 255, 0), 2)
+                cv2.putText(frame, str('%.6f' % face_lapvar), (body_l, body_t + 60), 0, 5e-3 * 100, (255, 0, 255), 2)
+                # print("scores: ", scores)
+                # print("overlaps: ", overlaps)
+                if(len(scores) > track.current_detection_idx):
+                    cv2.putText(frame, str('%.6f' % scores[track.current_detection_idx]), (body_l, body_t + 20), 0, 5e-3 * 100, (0, 255, 255), 2)
+                    cv2.putText(frame, str('%.6f' % overlaps[track.current_detection_idx]), (body_l, body_t + 80), 0, 5e-3 * 100, (0, 0, 255), 2)
+                if (len(result) > 0 and face_clipped_image.size > 0):
+                    cv2.rectangle(frame, (body_l + face_l - padded_wid, body_t + face_t - padded_len), \
+                                        (body_l + face_r - padded_wid, body_t + face_b - padded_len),(0,0,255), 2)
+
 
         for det in detections:
             bbox = det.to_tlbr()
-            cv2.rectangle(frame,(int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])),(255,0,0), 2)
-            
-        # cv2.imshow('', frame)
-        
+            body_t, body_l, body_b, body_r = (int(max(0, bbox[0])), int(max(0, bbox[1])), int(min(w, bbox[2])), int(min(h, bbox[3])))
+            cv2.rectangle(frame,(body_t, body_l), (body_b, body_r),(255,0,0), 2)
+                    
         if writeVideo_flag:
             # save a frame
             out.write(frame)
@@ -119,7 +259,6 @@ def track(yolo, video_path, image_output_dir):
             list_file.write('\n')
             
         fps  = ( fps + (1./(time.time()-t1)) ) / 2
-        print("fps= %f"%(fps))
         frame_id += 1
 
         # Press Q to stop!
@@ -142,10 +281,10 @@ def crpp_images(video_dir, root_image_output_dir):
         print("couldn't make ", root_image_output_dir)
         print(e)
         pass
-    for video_path in video_paths:
-        if os.path.isfile(video_path + ".avi"):
-            print(video_path + " already processed!")
-            continue
+    for video_path in tqdm(video_paths):
+        # if os.path.isfile(video_path + ".avi"):
+        #     print(video_path + " already processed!")
+        #     continue
         
         image_output_dir = os.path.join(root_image_output_dir, os.path.splitext(os.path.basename(video_path))[0])
         try:
