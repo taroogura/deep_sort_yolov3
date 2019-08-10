@@ -39,6 +39,7 @@ def non_max_suppression(boxes, max_bbox_overlap, scores=None):
 
     boxes = boxes.astype(np.float)
     pick = []
+    overlaps = []
 
     x1 = boxes[:, 0]
     y1 = boxes[:, 1]
@@ -51,23 +52,42 @@ def non_max_suppression(boxes, max_bbox_overlap, scores=None):
     else:
         idxs = np.argsort(y2)
 
-    while len(idxs) > 0:
-        last = len(idxs) - 1
-        i = idxs[last]
-        pick.append(i)
+    orig_idxs = np.copy(idxs)
 
-        xx1 = np.maximum(x1[i], x1[idxs[:last]])
-        yy1 = np.maximum(y1[i], y1[idxs[:last]])
-        xx2 = np.minimum(x2[i], x2[idxs[:last]])
-        yy2 = np.minimum(y2[i], y2[idxs[:last]])
+    if (len(orig_idxs) == 1):
+        overlaps = [0.0]
+        pick = [0]
+    else:
+        while len(idxs) > 0:
+            last = len(idxs) - 1
+            i = idxs[last]
+            pick.append(i)
 
-        w = np.maximum(0, xx2 - xx1 + 1)
-        h = np.maximum(0, yy2 - yy1 + 1)
+            # xx1 = np.maximum(x1[i], x1[idxs[:last]])
+            # yy1 = np.maximum(y1[i], y1[idxs[:last]])
+            # xx2 = np.minimum(x2[i], x2[idxs[:last]])
+            # yy2 = np.minimum(y2[i], y2[idxs[:last]])
 
-        overlap = (w * h) / area[idxs[:last]]
+            other_idxs = np.delete(orig_idxs, i)
+            xx1 = np.maximum(x1[i], x1[other_idxs])
+            yy1 = np.maximum(y1[i], y1[other_idxs])
+            xx2 = np.minimum(x2[i], x2[other_idxs])
+            yy2 = np.minimum(y2[i], y2[other_idxs])
 
-        idxs = np.delete(
-            idxs, np.concatenate(
-                ([last], np.where(overlap > max_bbox_overlap)[0])))
+            w = np.maximum(0, xx2 - xx1 + 1)
+            h = np.maximum(0, yy2 - yy1 + 1)
 
-    return pick
+            try:
+                overlap = (w * h) / area[idxs[:last]]
+            except:
+                print(w.shape)
+                print(h.shape)
+                print(area[idxs[:last]].shape)
+            # overlaps.append((w * h) / area[i])
+            overlaps.append(np.max((w * h) / area[i]))
+
+            idxs = np.delete(
+                idxs, np.concatenate(
+                    ([last], np.where(overlap > max_bbox_overlap)[0])))
+
+    return pick, overlaps
