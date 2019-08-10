@@ -231,7 +231,8 @@ def track(yolo, video_path, image_output_dir):
             cv2.putText(frame, str(track.track_id), (body_l, body_t), 0, 5e-3 * 200, (0, 255, 0), 2)
 
             if (len(scores) > 0):
-                cv2.putText(frame, str('%.6f' % lapvar), (body_l, body_t + 40), 0, 5e-3 * 100, (255, 255, 0), 2)
+                # cv2.putText(frame, str('%.6f' % lapvar), (body_l, body_t + 40), 0, 5e-3 * 100, (255, 255, 0), 2)
+                cv2.putText(frame, str('%.6f' % face_confidence), (body_l, body_t + 40), 0, 5e-3 * 100, (255, 255, 0), 2)
                 cv2.putText(frame, str('%.6f' % face_lapvar), (body_l, body_t + 60), 0, 5e-3 * 100, (255, 0, 255), 2)
                 # print("scores: ", scores)
                 # print("overlaps: ", overlaps)
