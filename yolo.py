@@ -95,12 +95,13 @@ class YOLO(object):
                 K.learning_phase(): 0
             })
         return_boxs = []
+        scores = []
         for i, c in reversed(list(enumerate(out_classes))):
             predicted_class = self.class_names[c]
             if predicted_class != 'person' :
                 continue
             box = out_boxes[i]
-           # score = out_scores[i]  
+            score = out_scores[i]  
             x = int(box[1])  
             y = int(box[0])  
             w = int(box[3]-box[1])
@@ -111,9 +112,10 @@ class YOLO(object):
             if y < 0 :
                 h = h + y
                 y = 0 
-            return_boxs.append([x,y,w,h])
+            return_boxs.append([x, y, w, h])
+            scores.append(score)
 
-        return return_boxs
+        return return_boxs, scores
 
     def close_session(self):
         self.sess.close()
