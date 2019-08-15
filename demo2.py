@@ -229,8 +229,9 @@ def track(yolo, video_path, image_output_dir):
                     is_face_detected = True
                     face_output_image_path = output_image_path + "_face.jpg"
                     cv2.imwrite(face_output_image_path, square_padded_img)
-                    face_lapvar = sharpness_lap(black_padded_img[int(face_bbox[1]):int(face_bbox[1] + face_bbox[3]), \
-                                                                 int(face_bbox[0]):int(face_bbox[0] + face_bbox[2])] )
+                    real_face_area = black_padded_img[int(face_bbox[1]):int(face_bbox[1] + face_bbox[3]), int(face_bbox[0]):int(face_bbox[0] + face_bbox[2])]
+                    face_lapvar = sharpness_lap(real_face_area) if (real_face_area.size > 0) else 0
+                                                                 
             padded_cropped_image = rectangle_padding(cropped_image, 2.0)
             cv2.imwrite(output_image_path, padded_cropped_image)
             lapvar = sharpness_lap(cropped_image)
