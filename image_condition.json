@@ -1,0 +1,23 @@
+{
+    "condition": 
+    {
+        "body_w": 
+        { 
+            "max": 210 , 
+            "min": 50
+        },
+        "body_h": 
+        { 
+            "max": 420 , 
+            "min": 100
+        },
+        "body_confidence":
+        {
+            "min": 0.98
+        },
+        "body_overlap":
+        {
+            "max": 0.25
+        }
+    }
+}
