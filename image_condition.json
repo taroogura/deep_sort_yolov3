@@ -3,17 +3,17 @@
     {
         "body_w": 
         { 
-            "max": 210 , 
-            "min": 50
+            "max": 240 , 
+            "min": 30
         },
         "body_h": 
         { 
-            "max": 420 , 
-            "min": 100
+            "max": 480 , 
+            "min": 60
         },
         "body_confidence":
         {
-            "min": 0.98
+            "min": 0.90
         },
         "body_overlap":
         {

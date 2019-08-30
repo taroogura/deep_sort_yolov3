@@ -111,9 +111,11 @@ def track(yolo, video_path, image_output_dir):
     
     # video_capture = cv2.VideoCapture(0)
     video_name = os.path.basename(video_path)
-    splitted_videoname = re.split("_|-", os.path.splitext(video_name)[0])
+    # splitted_videoname = re.split("_|-", os.path.splitext(video_name)[0])
+    splitted_videoname = re.split("_", os.path.splitext(video_name)[0])
 
     camera_name = splitted_videoname[0]
+    # print("camera_name: ", camera_name)
     # 1/10 秒の桁までを時間ラベルとして保持しておきたい
     base_time_label = int(splitted_videoname[1][:-1]) + int((int(splitted_videoname[1][-1]) + 5) / 10)
     
